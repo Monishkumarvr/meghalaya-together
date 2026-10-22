@@ -1,5 +1,5 @@
 -- Meghalaya Together: two-member trip with row-level security.
--- Run ONCE in a new Supabase project's SQL Editor. No credentials are stored here.
+-- Run the ENTIRE script in Supabase SQL Editor (role: postgres). Safe to rerun if setup was interrupted. No credentials are stored here.
 create extension if not exists pgcrypto;
 
 create table if not exists public.trips (
@@ -31,26 +31,31 @@ alter table public.trip_kv enable row level security;
 
 -- Each account can only read its own membership entry. SECURITY DEFINER RPCs
 -- create the membership records; clients cannot add members directly.
+drop policy if exists "members read own membership" on public.trip_members;
 create policy "members read own membership" on public.trip_members
   for select to authenticated using (user_id=(select auth.uid()));
 
+drop policy if exists "trips readable by members" on public.trips;
 create policy "trips readable by members" on public.trips
   for select to authenticated using (
     exists (select 1 from public.trip_members m
             where m.trip_id=id and m.user_id=(select auth.uid()))
   );
 
+drop policy if exists "trip kv select for members" on public.trip_kv;
 create policy "trip kv select for members" on public.trip_kv
   for select to authenticated using (
     exists (select 1 from public.trip_members m
             where m.trip_id=trip_kv.trip_id and m.user_id=(select auth.uid()))
   );
+drop policy if exists "trip kv insert for members" on public.trip_kv;
 create policy "trip kv insert for members" on public.trip_kv
   for insert to authenticated with check (
     updated_by=(select auth.uid()) and
     exists (select 1 from public.trip_members m
             where m.trip_id=trip_kv.trip_id and m.user_id=(select auth.uid()))
   );
+drop policy if exists "trip kv update for members" on public.trip_kv;
 create policy "trip kv update for members" on public.trip_kv
   for update to authenticated using (
     exists (select 1 from public.trip_members m
@@ -108,7 +113,23 @@ revoke all on function public.join_trip(uuid) from public,anon;
 grant execute on function public.create_trip(text) to authenticated;
 grant execute on function public.join_trip(uuid) to authenticated;
 
--- Enable INSERT/UPDATE broadcasts; the frontend also refreshes on reconnect.
--- On a fresh project this succeeds once. If you rerun and see "already member",
--- comment out the following line (the tables and policies already exist).
-alter publication supabase_realtime add table public.trip_kv;
+-- Enable INSERT/UPDATE broadcasts idempotently. Does not duplicate an existing publication member.
+do $$
+begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (
+       select 1 from pg_publication_tables
+       where pubname = 'supabase_realtime'
+         and schemaname = 'public'
+         and tablename = 'trip_kv'
+     )
+  then
+    alter publication supabase_realtime add table public.trip_kv;
+  end if;
+end;
+$$;
+
+-- Expected: all three columns report a table name, not NULL.
+select to_regclass('public.trips') as trips,
+       to_regclass('public.trip_members') as trip_members,
+       to_regclass('public.trip_kv') as trip_kv;

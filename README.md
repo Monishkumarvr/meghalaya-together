@@ -7,7 +7,7 @@ A mobile-friendly GitHub Pages PWA for two travellers. Includes your **actual th
 ### 1. Create Supabase project (required only for sharing/sync)
 
 1. Visit [supabase.com/dashboard](https://supabase.com/dashboard) and create a project.
-2. Open **SQL Editor**. Paste and run [supabase/schema.sql](supabase/schema.sql) **once**. It creates trip, member and key/value tables, RLS policies, and secure `create_trip` / `join_trip` RPCs.
+2. Open **SQL Editor**. Paste and run **the entire** [supabase/schema.sql](supabase/schema.sql) (not a selected fragment). It is safe to rerun if setup was interrupted. It creates trip, member and key/value tables, RLS policies, and secure `create_trip` / `join_trip` RPCs.
 3. Go to **Project Settings → API Keys** (the location might be labelled "Connect" or "API" in newer dashboards). Copy the **Project URL** and the **publishable key** (`sb_publishable_...`) or legacy anon key. **Never use a secret/service_role key in browser files.**
 4. Edit [config.js](config.js):
    ```js
@@ -18,6 +18,31 @@ A mobile-friendly GitHub Pages PWA for two travellers. Includes your **actual th
    ```
 5. In **Authentication → Providers → Email**, enable email authentication and magic-link sign-in. In **Authentication → URL Configuration**, set your deployed URL in **Site URL** and **Redirect URLs**, including the trailing slash, e.g. `https://USERNAME.github.io/meghalaya-together/`.
 6. Supabase's default email service has limits, so ensure both of your login emails actually arrive. If not, configure a supported custom SMTP provider in Supabase.
+
+
+### Optional two-step recovery for missing tables
+
+If running only the policy/grant section caused `42P01`, you can repair without deleting your project:
+
+1. In Supabase SQL Editor, select your **intended project** and run the entire contents of [`supabase/00_bootstrap_tables.sql`](supabase/00_bootstrap_tables.sql). Its result must display `trips`, `trip_members`, and `trip_kv`. It creates tables but **does not** install policies or trip RPCs.
+2. Next run the **entire** [`supabase/schema.sql`](supabase/schema.sql), starting from `create extension` and ending with the verification query. This installs member-only RLS and the `create_trip`/`join_trip` functions used by the website. It won't delete existing trip data.
+3. Run [`supabase/02_verify_setup.sql`](supabase/02_verify_setup.sql). Confirm all three tables and two functions are present and all three tables have RLS enabled.
+
+**Do not stop after step 1** or disable RLS to make the error disappear. Never paste a secret or service-role key into the website. If tables exist but function/policy creation fails, read the exact new error; table bootstrap alone cannot fix a separate permissions or schema issue.
+
+### SQL Editor error `42P01: relation "public.trips" does not exist`
+
+Run the **entire** [`supabase/schema.sql`](supabase/schema.sql) from the first `create extension` statement onward in Supabase SQL Editor, with the active database role set to **postgres**. The `trips` table is created near the beginning and other statements depend on it. A highlighted text selection or a later snippet alone causes this error. This version can be rerun: policies are safely replaced and realtime publication membership is added only when missing.
+
+Check the setup using:
+
+```sql
+select to_regclass('public.trips') as trips,
+       to_regclass('public.trip_members') as trip_members,
+       to_regclass('public.trip_kv') as trip_kv;
+```
+
+All three results should be non-null. If they are null, check that you're using the intended Supabase project (top-left project selector) and SQL Editor, rather than the Table Editor or a different project's SQL workspace.
 
 ### 2. Deploy to GitHub Pages
 
