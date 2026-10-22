@@ -1,0 +1,24 @@
+{
+  "name": "Meghalaya Together \u00b7 2026",
+  "short_name": "Meghalaya \u2661",
+  "description": "A shared offline-friendly trip planner, itinerary, packing and expenses for two.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4ec",
+  "theme_color": "#143b37",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
